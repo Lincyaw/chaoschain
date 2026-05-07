@@ -333,9 +333,7 @@ def _card_add_impl(path: Path, force: bool, no_commit: bool, strict: bool) -> No
 
     results: list[dict[str, object]] = []
     for f in files:
-        r = _card_add_one(
-            f, repo=repo, existing_ids=existing_ids, force=force, no_commit=no_commit
-        )
+        r = _card_add_one(f, repo=repo, existing_ids=existing_ids, force=force, no_commit=no_commit)
         results.append(r)
         if strict and not r["ok"]:
             break

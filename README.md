@@ -1,5 +1,7 @@
 # chaoschain
 
+[![ci](https://github.com/Lincyaw/chaoschain/actions/workflows/ci.yml/badge.svg)](https://github.com/Lincyaw/chaoschain/actions/workflows/ci.yml)
+
 Heterogeneous causal knowledge base for cascade fault chain mining.
 
 `chaoschain` is a **library + CLI** that defines the schema, storage, and
