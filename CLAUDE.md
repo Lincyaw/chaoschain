@@ -84,11 +84,29 @@ cards / tests / lines of code** over more.
 | Validate cards | `uv run chaoschain validate cards/` | Run after any card change |
 | Library stats | `uv run chaoschain stats` | Track connectivity over time |
 | Candidate chains | `uv run chaoschain chains --max-hops 3` | Sanity check linking |
+| Card history | `uv run chaoschain history FC-NNNN` | Inspect change log per card |
+| Card rollback | `uv run chaoschain rollback FC-NNNN <sha>` | Restore prior version |
+
+## Versioning / snapshots
+
+Cards are tracked in git. Every CLI write (`add`, `rm`, `rollback`) auto-
+commits unless `--no-commit` is passed. To inspect or revert a card:
+
+```
+chaoschain history FC-0001                   # revisions for one card
+chaoschain show-at FC-0001 <commit>          # card content at a commit
+chaoschain rollback FC-0001 <commit>         # restore + commit
+```
+
+The repo IS the version store — there is no separate snapshot mechanism.
 
 ## Project conventions
 
 - **Package manager: `uv` only.** Do not use pip / poetry / pdm. All commands
   go through `uv run`.
+- **Distributable via pip.** Public surface is `chaoschain` CLI + the
+  `chaoschain.{schemas,store,validators}` Python API. Consumers (agents,
+  pipelines) install with `pip install chaoschain`.
 - **Cards live in `cards/<defect_class>/*.yaml`.** Top-level folder names are
   the schema dispatch keys (see `validators/registry.py`).
 - **Predicates must come from the controlled vocabulary** in
