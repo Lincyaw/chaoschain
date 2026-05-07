@@ -1,0 +1,16 @@
+id: FC-9003
+name: "invalid: empty evidence list"
+schema_version: 1
+defect:
+  class: concurrency
+  mechanism: "fixture"
+activation:
+  required: ["x"]
+  timescale: seconds
+observable:
+  detection_difficulty: easy
+downstream_effects:
+  - predicate: concurrency.lock.contended
+    confidence: medium
+    delay: seconds
+evidence: []

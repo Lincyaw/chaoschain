@@ -1,0 +1,20 @@
+id: FC-9001
+name: "invalid: predicate not in vocabulary"
+schema_version: 1
+defect:
+  class: resource_leak
+  mechanism: "fixture for testing predicate validation"
+activation:
+  required: ["x"]
+  timescale: seconds
+observable:
+  metrics:
+    - predicate: "made_up_class.foo.exhausted"
+  detection_difficulty: easy
+downstream_effects:
+  - predicate: app_resource.connection_pool.exhausted
+    confidence: high
+    delay: seconds
+evidence:
+  - source: "fixture"
+    type: bug_report

@@ -1,0 +1,60 @@
+id: FC-0001
+name: "DB connection leaked on exception path"
+schema_version: 1
+last_reviewed: "2026-05-07"
+
+defect:
+  class: resource_leak
+  subclass: connection_handle
+  mechanism: |
+    The exception branch does not call close()/release() on the borrowed
+    connection (no try/finally or context manager). Each error path leaks
+    one connection back to the pool's "in-use" counter without returning
+    it, until the pool's max is reached.
+  code_signature:
+    - language: java
+      pattern: "try { conn = pool.get(); ... } catch (Exception e) { /* no close */ }"
+
+activation:
+  required:
+    - "exception path on the leaking method is reached"
+  amplifying:
+    - "high request concurrency"
+    - "long-running process (low restart frequency)"
+  timescale: minutes_to_hours
+
+observable:
+  metrics:
+    - predicate: app_resource.connection_pool.accumulated
+      direction: up
+      shape: monotonic_linear
+    - predicate: latency.p99.degraded
+      shape: slow_ramp
+  logs:
+    - pattern: "Timeout acquiring connection from pool"
+      frequency: rising
+  traces:
+    - pattern: "DB span wait time right-skewed over time"
+  detection_difficulty: medium
+
+downstream_effects:
+  - predicate: app_resource.connection_pool.exhausted
+    confidence: high
+    delay: minutes_to_hours
+  - predicate: error_rate.timeout.amplified
+    confidence: high
+    delay: minutes_to_hours
+
+system_requirements:
+  - has_component: connection_pool
+  - has_component: relational_db_client
+  - exception_handling_present: true
+
+evidence:
+  - source: "synthetic-seed-card-for-bootstrap"
+    type: bug_report
+    extracted_by: hand
+    human_reviewed: true
+
+reproducibility:
+  confirmed_in_chaos: false

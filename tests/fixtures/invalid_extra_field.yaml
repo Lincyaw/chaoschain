@@ -1,0 +1,19 @@
+id: FC-9002
+name: "invalid: extra unknown field"
+schema_version: 1
+random_unknown_field: "should be rejected by extra=forbid"
+defect:
+  class: resource_leak
+  mechanism: "fixture"
+activation:
+  required: ["x"]
+  timescale: seconds
+observable:
+  detection_difficulty: easy
+downstream_effects:
+  - predicate: app_resource.connection_pool.exhausted
+    confidence: high
+    delay: seconds
+evidence:
+  - source: "fixture"
+    type: bug_report
