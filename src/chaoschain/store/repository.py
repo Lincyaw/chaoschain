@@ -158,9 +158,7 @@ class CardRepository:
             "predicates_emitted": len(emitted),
             "predicates_observed": len(observed),
             "bridgeable_predicates": len(bridgeable),
-            "connectivity_ratio": (
-                len(bridgeable) / len(emitted) if emitted else 0.0
-            ),
+            "connectivity_ratio": (len(bridgeable) / len(emitted) if emitted else 0.0),
         }
 
 

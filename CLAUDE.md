@@ -45,7 +45,7 @@ Full text: `/home/ddq/.claude/plugins/cache/autoharness/autoharness/1.1.3/refere
   Cards link via shared predicates. Vocabulary changes are reviewed with
   schema-level care.
 - **Connectivity > coverage.** Library health is measured by the bridgeable
-  predicate ratio (`uv run chaoschain stats`), not card count. A library of
+  predicate ratio (`uv run chaoschain library stats`), not card count. A library of
   500 disconnected cards is worse than 50 cards that form chains.
 - **Reproducibility is the only fact gate.** A card with
   `reproducibility.confirmed_in_chaos: false` is a hypothesis, not a fact.
@@ -55,13 +55,13 @@ Full text: `/home/ddq/.claude/plugins/cache/autoharness/autoharness/1.1.3/refere
 These are placeholders — set real baselines after the first 50 cards exist.
 
 1. **Library connectivity** — `bridgeable_predicates / predicates_emitted`
-   from `chaoschain stats`. Target: ≥ 0.3 once card count ≥ 30.
-   Measure: `uv run chaoschain stats`
+   from `chaoschain library stats`. Target: ≥ 0.3 once card count ≥ 30.
+   Measure: `uv run chaoschain library stats`
    Mechanism: script
 
 2. **Schema validity** — every YAML under `cards/` parses cleanly.
    Currently: enforced.
-   Measure: `uv run chaoschain validate cards/`
+   Measure: `uv run chaoschain card validate cards/`
    Mechanism: script (CI gate)
 
 3. **Reproducibility ratio** — fraction of cards with
@@ -81,24 +81,27 @@ cards / tests / lines of code** over more.
 | Lint | `uv run ruff check src/ tests/` | |
 | Format | `uv run ruff format src/ tests/` | |
 | Type check | `uv run mypy` | |
-| Validate cards | `uv run chaoschain validate cards/` | Run after any card change |
-| Library stats | `uv run chaoschain stats` | Track connectivity over time |
-| Candidate chains | `uv run chaoschain chains --max-hops 3` | Sanity check linking |
-| Card history | `uv run chaoschain history FC-NNNN` | Inspect change log per card |
-| Card rollback | `uv run chaoschain rollback FC-NNNN <sha>` | Restore prior version |
+| Validate cards | `uv run chaoschain card validate cards/` | Run after any card change |
+| Library stats | `uv run chaoschain library stats` | Track connectivity over time |
+| Candidate chains | `uv run chaoschain library chains --max-hops 3` | Sanity check linking |
+| Card history | `uv run chaoschain card history FC-NNNN` | Inspect change log per card |
+| Card rollback | `uv run chaoschain --yes card rollback FC-NNNN <sha>` | Restore prior version |
 
 ## Versioning / snapshots
 
-Cards are tracked in git. Every CLI write (`add`, `rm`, `rollback`) auto-
-commits unless `--no-commit` is passed. To inspect or revert a card:
+Cards are tracked in git. Every CLI write (`card add`, `card rm`,
+`card rollback`) auto-commits unless `--no-commit` is passed. Destructive
+ops require `--yes`. To inspect or revert a card:
 
 ```
-chaoschain history FC-0001                   # revisions for one card
-chaoschain show-at FC-0001 <commit>          # card content at a commit
-chaoschain rollback FC-0001 <commit>         # restore + commit
+chaoschain card history FC-0001                       # revisions for one card
+chaoschain card show-at FC-0001 <commit>              # card content at a commit
+chaoschain --yes card rollback FC-0001 <commit>       # restore + commit
 ```
 
 The repo IS the version store — there is no separate snapshot mechanism.
+The full CLI contract (commands, flags, exit codes, JSON shapes) lives in
+`docs/cli-contract.md`.
 
 ## Project conventions
 
@@ -133,7 +136,7 @@ Highlights:
 1. Search before creating. Most "new" cards are variants of existing ones.
 2. Reject vague evidence. "There's a bug like this" is not a card.
 3. New predicates require a vocabulary change, not inline invention.
-4. Check `chaoschain stats` before and after — note the delta.
+4. Check `chaoschain library stats` before and after — note the delta.
 
 ## Active skills
 

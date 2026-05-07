@@ -29,9 +29,7 @@ def _run(args: list[str], cwd: Path) -> str:
         check=False,
     )
     if proc.returncode != 0:
-        raise GitError(
-            f"git {' '.join(args)} (cwd={cwd}) failed:\n{proc.stderr.strip()}"
-        )
+        raise GitError(f"git {' '.join(args)} (cwd={cwd}) failed:\n{proc.stderr.strip()}")
     return proc.stdout
 
 

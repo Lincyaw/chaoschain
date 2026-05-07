@@ -18,7 +18,7 @@ card, not many.** Push back when the input doesn't justify a new card.
 
 Concrete tests before creating any card:
 
-1. **Is it really new?** Run `uv run chaoschain search --text "<key terms>"`
+1. **Is it really new?** Run `uv run chaoschain library search --text "<key terms>"`
    and inspect existing cards. If it's a variant of an existing card,
    either extend that card's evidence list or refine its mechanism —
    do not duplicate.
@@ -40,14 +40,14 @@ later."
 
 1. Read `docs/first-principles.md`, `docs/schema-v0.1.md`,
    `docs/predicate-vocabulary.md` if you haven't this session.
-2. Run `uv run chaoschain search --text "<term>"` to check for duplicates.
+2. Run `uv run chaoschain library search --text "<term>"` to check for duplicates.
 3. Draft the YAML in your head; identify which predicates apply
    strictly from the controlled vocabulary.
 4. Pick the next free `FC-NNNN` id (`ls cards/**/*.yaml` to find max).
 5. Write the file under `cards/<defect_class>/<slug>.yaml`.
-6. Run `uv run chaoschain validate cards/` — must pass.
-7. Run `uv run chaoschain stats` — note connectivity_ratio change.
-8. Run `uv run chaoschain chains --max-hops 3` to see if the new card
+6. Run `uv run chaoschain card validate cards/` — must pass.
+7. Run `uv run chaoschain library stats` — note connectivity_ratio change.
+8. Run `uv run chaoschain library chains --max-hops 3` to see if the new card
    connects existing chains.
 9. Tell the user what changed and what's still missing
    (e.g., "card added but reproducibility unconfirmed; needs chaos
@@ -78,11 +78,12 @@ file. Update any docs that reference the deleted id.
 ## Useful commands
 
 ```bash
-uv run chaoschain validate cards/
-uv run chaoschain search --emits <predicate>
-uv run chaoschain search --observes <predicate>
-uv run chaoschain search --text <term>
-uv run chaoschain chains --max-hops 3
-uv run chaoschain stats
-uv run chaoschain predicates  # list controlled vocabulary
+uv run chaoschain card validate cards/
+uv run chaoschain library search --emits <predicate>
+uv run chaoschain library search --observes <predicate>
+uv run chaoschain library search --text <term>
+uv run chaoschain library chains --max-hops 3
+uv run chaoschain library stats
+uv run chaoschain vocab list                       # controlled vocabulary
+uv run chaoschain vocab show <predicate>           # parse a predicate
 ```

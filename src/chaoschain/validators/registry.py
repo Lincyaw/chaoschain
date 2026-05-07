@@ -34,9 +34,7 @@ FAULT_CARD_FOLDERS = {
     "aging",
 }
 
-REGISTRY: Mapping[str, type[BaseModel]] = {
-    folder: FaultCard for folder in FAULT_CARD_FOLDERS
-}
+REGISTRY: Mapping[str, type[BaseModel]] = {folder: FaultCard for folder in FAULT_CARD_FOLDERS}
 
 
 def resolve_schema(card_path: Path, cards_root: Path) -> type[BaseModel]:

@@ -1,0 +1,20 @@
+id: FC-9100
+name: "fixture: dry-run target"
+schema_version: 1
+defect:
+  class: resource_leak
+  mechanism: "fixture used by test_card_add_dry_run_no_write"
+activation:
+  required: ["x"]
+  timescale: seconds
+observable:
+  metrics:
+    - predicate: app_resource.connection_pool.accumulated
+  detection_difficulty: easy
+downstream_effects:
+  - predicate: app_resource.connection_pool.exhausted
+    confidence: high
+    delay: seconds
+evidence:
+  - source: "fixture"
+    type: bug_report
