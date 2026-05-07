@@ -50,7 +50,7 @@ def _show_impl(predicate: str) -> None:
         }
         ok = True
         err: str | None = None
-    except (ValueError, KeyError) as e:
+    except ValueError as e:
         ok = False
         err = str(e)
         result = {"predicate": predicate, "valid": False, "error": err}

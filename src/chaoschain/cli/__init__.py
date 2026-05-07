@@ -13,7 +13,6 @@ in docs/cli-contract.md.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import typer
@@ -62,16 +61,8 @@ def _root(
         help="Hard-disable write paths; any write attempt exits 4.",
     ),
 ) -> None:
-    """Populate the global CLIState before any subcommand body runs."""
     STATE.cards_root = resolve_cards_root(cards_root)
-    if format is None:
-        # TTY default: text. Non-TTY default: still text (humans piping
-        # to less / grep get readable output unless they ask for JSON).
-        STATE.format = OutputFormat.TEXT
-        if not sys.stdout.isatty():
-            STATE.format = OutputFormat.TEXT
-    else:
-        STATE.format = format
+    STATE.format = format or OutputFormat.TEXT
     STATE.quiet = quiet
     STATE.yes = yes
     STATE.dry_run = dry_run

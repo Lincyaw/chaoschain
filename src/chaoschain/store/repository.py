@@ -150,8 +150,8 @@ class CardRepository:
 
     def coverage_stats(self) -> dict[str, int | float]:
         cards = self.load_all()
-        emitted = self.all_predicates_emitted()
-        observed = self.all_predicates_observed()
+        emitted = {e.predicate for lc in cards for e in lc.card.downstream_effects}
+        observed = {m.predicate for lc in cards for m in lc.card.observable.metrics}
         bridgeable = emitted & observed
         return {
             "cards": len(cards),

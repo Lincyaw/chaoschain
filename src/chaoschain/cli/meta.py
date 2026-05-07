@@ -33,11 +33,6 @@ def _version_impl() -> None:
         emit_data(f"  fault_card schema: v{FAULT_CARD_SCHEMA_VERSION}")
 
 
-# --------------------------------------------------------------------------- #
-# dump-schema
-# --------------------------------------------------------------------------- #
-
-
 def dump_schema() -> None:
     run_command(_dump_schema_impl)
 

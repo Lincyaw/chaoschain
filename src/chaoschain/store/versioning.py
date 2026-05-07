@@ -88,20 +88,20 @@ def rollback(file: Path, commit: str, *, commit_message: str | None = None) -> N
         _run(["commit", "-m", commit_message], root)
 
 
-def commit_file(file: Path, message: str) -> None:
-    """Stage and commit a single file. Best-effort: if not in a git repo,
-    or if there's nothing to commit, raise GitError so the caller can
-    decide whether to ignore or surface."""
+def commit_file(file: Path, message: str) -> str:
+    """Stage and commit a single file. Returns the new HEAD SHA. Raises
+    GitError if not in a git repo or there's nothing to commit."""
     root = repo_root(file.parent)
     rel = file.resolve().relative_to(root)
     _run(["add", str(rel)], root)
-    # `commit` returns non-zero if nothing to commit; surface as GitError.
     _run(["commit", "-m", message], root)
+    return _run(["rev-parse", "HEAD"], root).strip()
 
 
-def remove_file(file: Path, message: str) -> None:
-    """`git rm` + commit."""
+def remove_file(file: Path, message: str) -> str:
+    """`git rm` + commit. Returns the new HEAD SHA."""
     root = repo_root(file.parent)
     rel = file.resolve().relative_to(root)
     _run(["rm", str(rel)], root)
     _run(["commit", "-m", message], root)
+    return _run(["rev-parse", "HEAD"], root).strip()

@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from .. import exit_codes
 from ..schemas import FaultCard
 from ..store import versioning
+from ..store.repository import CardRepository, LoadedCard
 from ..validators.registry import resolve_schema
 from ._common import (
     STATE,
@@ -27,13 +28,7 @@ from ._common import (
 card_app = typer.Typer(no_args_is_help=True, add_completion=False)
 
 
-# --------------------------------------------------------------------------- #
-# helpers
-# --------------------------------------------------------------------------- #
-
-
 def _display_path(p: Path) -> str:
-    """Render a Path relative to cwd if possible; otherwise absolute."""
     try:
         return str(p.relative_to(Path.cwd()))
     except ValueError:
@@ -77,8 +72,8 @@ def _validate_one(path: Path, cards_root: Path) -> list[str]:
     return []
 
 
-def _require_card(card_id: str) -> object:
-    repo = open_repo()
+def _require_card(card_id: str, *, repo: CardRepository | None = None) -> LoadedCard:
+    repo = repo or open_repo()
     lc = repo.get(card_id)
     if lc is None:
         raise CLIError(
@@ -87,11 +82,6 @@ def _require_card(card_id: str) -> object:
             type="not_found",
         )
     return lc
-
-
-# --------------------------------------------------------------------------- #
-# commands
-# --------------------------------------------------------------------------- #
 
 
 @card_app.command("list", help="List every card in the library.")
@@ -125,42 +115,52 @@ def card_get(
     run_command(_card_get_impl, card_id, at)
 
 
+def _emit_card_at_commit(lc: LoadedCard, commit: str, *, key: str) -> None:
+    """Render `lc.path` as it existed at `commit`. `key` controls the JSON
+    field name (`at` for `card get --at`, `commit` for `card show-at`)."""
+    try:
+        text = versioning.show_at(lc.path, commit)
+    except versioning.GitError as e:
+        raise CLIError(str(e), exit_code=exit_codes.GIT, type="git_error") from e
+    if STATE.format is OutputFormat.JSON:
+        try:
+            payload = yaml.safe_load(text)
+        except yaml.YAMLError as e:
+            raise CLIError(
+                f"yaml parse error at {commit[:10]}: {e}",
+                exit_code=exit_codes.VALIDATION,
+                type="yaml_parse_error",
+            ) from e
+        emit_data(
+            json_value={
+                "id": lc.card.id,
+                "card": payload,
+                "path": str(lc.path),
+                key: commit,
+            }
+        )
+    else:
+        emit_data(text)
+
+
 def _card_get_impl(card_id: str, at: str | None) -> None:
     lc = _require_card(card_id)
     if at is not None:
-        try:
-            text = versioning.show_at(lc.path, at)  # type: ignore[attr-defined]
-        except versioning.GitError as e:
-            raise CLIError(str(e), exit_code=exit_codes.GIT, type="git_error") from e
-        if STATE.format is OutputFormat.JSON:
-            try:
-                payload = yaml.safe_load(text)
-            except yaml.YAMLError as e:
-                raise CLIError(str(e), exit_code=exit_codes.GIT, type="git_error") from e
-            emit_data(
-                json_value={
-                    "id": card_id,
-                    "card": payload,
-                    "path": str(lc.path),  # type: ignore[attr-defined]
-                    "at": at,
-                }
-            )
-        else:
-            emit_data(text)
+        _emit_card_at_commit(lc, at, key="at")
         return
 
     if STATE.format is OutputFormat.JSON:
         emit_data(
             json_value={
                 "id": card_id,
-                "card": lc.card.model_dump(by_alias=True, exclude_none=True),  # type: ignore[attr-defined]
-                "path": str(lc.path),  # type: ignore[attr-defined]
+                "card": lc.card.model_dump(by_alias=True, exclude_none=True),
+                "path": str(lc.path),
             }
         )
     else:
         emit_data(
             yaml.safe_dump(
-                lc.card.model_dump(by_alias=True, exclude_none=True),  # type: ignore[attr-defined]
+                lc.card.model_dump(by_alias=True, exclude_none=True),
                 sort_keys=False,
                 allow_unicode=True,
             )
@@ -234,10 +234,17 @@ def card_add(
     run_command(_card_add_impl, path, force, no_commit, strict)
 
 
-def _card_add_one(file: Path, *, force: bool, no_commit: bool) -> dict[str, object]:
-    """Process a single file. Returns a result dict; raises CLIError only
-    for things the caller wants to surface as a hard exit (write under
-    --read-only)."""
+def _card_add_one(
+    file: Path,
+    *,
+    repo: CardRepository,
+    existing_ids: set[str],
+    force: bool,
+    no_commit: bool,
+) -> dict[str, object]:
+    """Process one file. `existing_ids` is mutated on successful add so
+    later files in the same batch see the up-to-date set without
+    reloading the repo."""
     raw = _load_yaml(file)
     if not isinstance(raw, dict):
         return {
@@ -256,10 +263,8 @@ def _card_add_one(file: Path, *, force: bool, no_commit: bool) -> dict[str, obje
             "exit_code": exit_codes.VALIDATION,
         }
 
-    repo = open_repo()
-    existed = repo.get(card.id) is not None
-    target_dir = repo.root / card.defect.class_.value
-    target = target_dir / f"{card.id}.yaml"
+    existed = card.id in existing_ids
+    target = repo.root / card.defect.class_.value / f"{card.id}.yaml"
     action = "update" if existed else "add"
 
     if STATE.dry_run:
@@ -283,12 +288,13 @@ def _card_add_one(file: Path, *, force: bool, no_commit: bool) -> dict[str, obje
 
     assert_writable()
     written = repo.write(card)
+    existing_ids.add(card.id)
     emit_info(f"wrote {written}")
     committed = False
     commit_sha: str | None = None
     if not no_commit:
         try:
-            versioning.commit_file(written, f"{action} {card.id}: {card.name}")
+            commit_sha = versioning.commit_file(written, f"{action} {card.id}: {card.name}")
             committed = True
             emit_info(f"committed: {action} {card.id}")
         except versioning.GitError as e:
@@ -322,14 +328,18 @@ def _card_add_impl(path: Path, force: bool, no_commit: bool, strict: bool) -> No
             type="not_found",
         )
 
+    repo = open_repo()
+    existing_ids = {lc.card.id for lc in repo.load_all()}
+
     results: list[dict[str, object]] = []
     for f in files:
-        r = _card_add_one(f, force=force, no_commit=no_commit)
+        r = _card_add_one(
+            f, repo=repo, existing_ids=existing_ids, force=force, no_commit=no_commit
+        )
         results.append(r)
         if strict and not r["ok"]:
             break
 
-    # Pick the worst exit code among failures: 10 > 5 > 11.
     priority = {exit_codes.VALIDATION: 3, exit_codes.CONFLICT: 2, exit_codes.GIT: 1}
     failure_codes: list[int] = [
         int(r["exit_code"])  # type: ignore[call-overload]
@@ -340,8 +350,6 @@ def _card_add_impl(path: Path, force: bool, no_commit: bool, strict: bool) -> No
     if failure_codes:
         worst = max(failure_codes, key=lambda c: priority.get(c, 0))
 
-    # Single-file shortcut for the JSON success case (matches the
-    # contract shape in docs/cli-contract.md).
     if STATE.format is OutputFormat.JSON:
         if len(results) == 1 and results[0]["ok"]:
             r = results[0]
@@ -407,29 +415,37 @@ def _card_rm_impl(card_id: str, no_commit: bool) -> None:
                 json_value={
                     "action": "remove",
                     "id": card_id,
-                    "would_delete": str(lc.path),  # type: ignore[attr-defined]
+                    "would_delete": str(lc.path),
                 }
             )
         else:
-            emit_data(f"would remove {card_id} ({lc.path})")  # type: ignore[attr-defined]
+            emit_data(f"would remove {card_id} ({lc.path})")
         return
 
     assert_writable()
     committed = False
+    commit_sha: str | None = None
     if no_commit:
-        lc.path.unlink()  # type: ignore[attr-defined]
-        emit_info(f"deleted {lc.path}")  # type: ignore[attr-defined]
+        lc.path.unlink()
+        emit_info(f"deleted {lc.path}")
     else:
         try:
-            versioning.remove_file(lc.path, f"remove {card_id}: {lc.card.name}")  # type: ignore[attr-defined]
+            commit_sha = versioning.remove_file(lc.path, f"remove {card_id}: {lc.card.name}")
             committed = True
             emit_info(f"deleted and committed {card_id}")
         except versioning.GitError as e:
-            lc.path.unlink(missing_ok=True)  # type: ignore[attr-defined]
-            emit_info(f"deleted {lc.path}; skipped commit ({e})")  # type: ignore[attr-defined]
+            lc.path.unlink(missing_ok=True)
+            emit_info(f"deleted {lc.path}; skipped commit ({e})")
 
     if STATE.format is OutputFormat.JSON:
-        emit_data(json_value={"action": "remove", "id": card_id, "committed": committed})
+        emit_data(
+            json_value={
+                "action": "remove",
+                "id": card_id,
+                "committed": committed,
+                "commit": commit_sha,
+            }
+        )
     else:
         emit_data(f"removed {card_id}")
 
@@ -445,7 +461,7 @@ def card_history(
 def _card_history_impl(card_id: str, limit: int) -> None:
     lc = _require_card(card_id)
     try:
-        revs = versioning.history(lc.path, limit=limit)  # type: ignore[attr-defined]
+        revs = versioning.history(lc.path, limit=limit)
     except versioning.GitError as e:
         raise CLIError(str(e), exit_code=exit_codes.GIT, type="git_error") from e
     if STATE.format is OutputFormat.JSON:
@@ -475,7 +491,12 @@ def card_show_at(
     card_id: str = typer.Argument(...),
     commit: str = typer.Argument(..., help="Git commit (full or short SHA)."),
 ) -> None:
-    run_command(_card_get_impl, card_id, commit)
+    run_command(_card_show_at_impl, card_id, commit)
+
+
+def _card_show_at_impl(card_id: str, commit: str) -> None:
+    lc = _require_card(card_id)
+    _emit_card_at_commit(lc, commit, key="commit")
 
 
 @card_app.command("rollback", help="Restore a card to its content at a commit. Destructive.")
@@ -503,7 +524,7 @@ def _card_rollback_impl(card_id: str, commit: str, no_commit: bool) -> None:
     assert_writable()
     msg = None if no_commit else f"rollback {card_id} to {commit[:10]}"
     try:
-        versioning.rollback(lc.path, commit, commit_message=msg)  # type: ignore[attr-defined]
+        versioning.rollback(lc.path, commit, commit_message=msg)
     except versioning.GitError as e:
         raise CLIError(str(e), exit_code=exit_codes.GIT, type="git_error") from e
     emit_info(f"rolled back {card_id} to {commit[:10]}")

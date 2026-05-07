@@ -20,11 +20,14 @@ import sys
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import typer
 
 from .. import exit_codes
+
+if TYPE_CHECKING:
+    from ..store import CardRepository
 
 
 class OutputFormat(StrEnum):
@@ -53,7 +56,6 @@ class CLIState:
     read_only: bool = False
 
 
-# Single mutable container; Typer callbacks populate it before commands run.
 STATE = CLIState()
 
 
@@ -89,11 +91,6 @@ def require_yes(action: str) -> None:
             exit_code=exit_codes.REFUSED,
             type="refused",
         )
-
-
-# --------------------------------------------------------------------------- #
-# output
-# --------------------------------------------------------------------------- #
 
 
 def emit_data(text: str = "", *, json_value: Any = None) -> None:
@@ -143,14 +140,8 @@ def run_command(fn: Any, *args: Any, **kwargs: Any) -> None:
         raise typer.Exit(code=e.exit_code) from e
 
 
-# --------------------------------------------------------------------------- #
-# repository helper
-# --------------------------------------------------------------------------- #
-
-
-def open_repo() -> Any:
-    """Open CardRepository from STATE.cards_root, mapping FileNotFoundError
-    to exit 7 (environment)."""
+def open_repo() -> CardRepository:
+    """Map FileNotFoundError on cards_root to exit 7 (environment)."""
     from ..store import CardRepository
 
     try:
